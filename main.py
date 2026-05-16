@@ -14,7 +14,7 @@ import yt_dlp
 from flask import Flask
 from threading import Thread
 
-# --- RENDER UCHUN FLASK SERVER (DOIM ONLAYN TURISHI UCHUN) ---
+# --- RENDER UCHUN FLASK SERVER ---
 app = Flask('')
 @app.route('/')
 def home(): return "Jarvis is Running 24/7!"
@@ -24,7 +24,7 @@ def run_flask(): app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 api_id = 32894755
 api_hash = '67f6c4bfe4148ee90c1f54376a4da248'
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyBgYRya8IVvRgCX0TY_rY_cp8aLIxlQbkE")
-SESSION_STRING = os.environ.get("SESSION_STRING") # Renderda o'rnatasiz
+SESSION_STRING = os.environ.get("SESSION_STRING")
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-3.1-flash-lite')
@@ -54,7 +54,7 @@ async def send_as_voice(chat_id, text):
         if os.path.exists(filename): os.remove(filename)
     except Exception as e: print(f"❌ Ovoz xatosi: {e}")
 
-# --- BUYRUQLAR (AVVALGI HAMMA BUYRUQLAR SHU YERDA) ---
+# --- BUYRUQLAR ---
 @client.on(events.NewMessage(pattern=r'\.groups (on|off)', outgoing=True))
 async def groups_toggle(event):
     global GROUPS_ENABLED
@@ -75,6 +75,35 @@ async def download_handler(event):
             if os.path.exists(filename): os.remove(filename)
             await event.delete()
     except Exception as e: await event.edit(f"❌ Xato: {e}")
+
+@client.on(events.NewMessage(pattern=r'\.ocr', outgoing=True))
+async def ocr_handler(event):
+    if not event.is_reply: return await event.edit("`Rasmga reply qiling!`")
+    reply = await event.get_reply_message()
+    if not reply.photo: return await event.edit("`Bu rasm emas!`")
+    await event.edit("`O'qilmoqda...` 🔍")
+    path = await reply.download_media()
+    try:
+        with PIL.Image.open(path) as img:
+            img.load()
+            response = model.generate_content(["Ushbu rasmdagi barcha matnlarni aniq ko'chirib ber. Faqat matnni o'zini qaytar.", img])
+            await event.edit(f"📝 **Rasmdagi matn:**\n\n{response.text}")
+    except Exception as e: await event.edit(f"❌ Xatolik: {e}")
+    if os.path.exists(path): os.remove(path)
+
+@client.on(events.NewMessage(pattern=r'\.summary ?(\d+)?', outgoing=True))
+async def summary_handler(event):
+    lim = int(event.pattern_match.group(1) or 50)
+    await event.edit(f"`{lim} xabar tahlili...` 📑")
+    msgs = []
+    async for m in client.iter_messages(event.chat_id, limit=lim):
+        if m.text:
+            s = await m.get_sender()
+            name = utils.get_display_name(s) if s else "Noma'lum"
+            msgs.append(f"{name}: {m.text}")
+    if not msgs: return await event.edit("`Xabarlar yo'q.`")
+    res = model.generate_content(f"Xulosa qil:\n\n" + "\n".join(msgs[::-1]))
+    await event.edit(f"📑 **PRO Xulosa:**\n\n{res.text}")
 
 @client.on(events.Raw(types.UpdatePhoneCall))
 async def call_handler(event):
@@ -147,7 +176,7 @@ async def auto_respond(event):
 
 # --- ISHGA TUSHIRISH ---
 if __name__ == '__main__':
-    Thread(target=run_flask).start() # Flaskni alohida thread'da ishga tushiramiz
+    Thread(target=run_flask).start()
     print("Jarvis Render Edition ishga tushishga tayyor...")
     client.start()
     client.run_until_disconnected()

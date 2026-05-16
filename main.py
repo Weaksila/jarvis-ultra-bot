@@ -64,7 +64,8 @@ async def send_as_voice(chat_id, text):
 async def groups_toggle(event):
     global GROUPS_ENABLED
     GROUPS_ENABLED = (event.pattern_match.group(1) == "on")
-    await event.edit(f"**Guruhlarda AI javob berish:** `{'Yoqildi' if GROUPS_ENABLED else 'O\'chirildi'}`")
+    text = "Yoqildi" if GROUPS_ENABLED else "O'chirildi"
+    await event.edit(f"**Guruhlarda AI javob berish:** `{text}`")
 
 @client.on(events.NewMessage(pattern=r'\.dl (.*)', outgoing=True))
 async def download_handler(event):
@@ -151,10 +152,13 @@ async def unafk_handler(event):
 
 @client.on(events.NewMessage(pattern=r'\.status', outgoing=True))
 async def status_handler(event):
+    afk_s = "Yoqilgan" if IS_AFK else "O'chirilgan"
+    ai_s = "Yoqilgan" if AI_ENABLED else "O'chirilgan"
+    gr_s = "Yoqilgan" if GROUPS_ENABLED else "O'chirilgan"
     status = f"🤖 **Jarvis Status:**\n\n"
-    status += f"💤 **AFK:** `{'Yoqilgan' if IS_AFK else 'O\'chirilgan'}`\n"
-    status += f"🧠 **AI:** `{'Yoqilgan' if AI_ENABLED else 'O\'chirilgan'}`\n"
-    status += f"👥 **Guruhlar:** `{'Yoqilgan' if GROUPS_ENABLED else 'O\'chirilgan'}`"
+    status += f"💤 **AFK:** `{afk_s}`\n"
+    status += f"🧠 **AI:** `{ai_s}`\n"
+    status += f"👥 **Guruhlar:** `{gr_s}`"
     await event.edit(status)
 
 @client.on(events.NewMessage(outgoing=True))

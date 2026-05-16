@@ -131,22 +131,40 @@ async def anti_delete_handler(event):
 @client.on(events.NewMessage(pattern=r'\.afk ?(.*)', outgoing=True))
 async def afk_handler(event):
     global IS_AFK, ORIGINAL_BIO
-    IS_AFK = True
+    if IS_AFK: return await event.edit("`Siz allaqachon AFK holatidasiz.`")
     try:
         full = await client(GetFullUserRequest('me'))
         ORIGINAL_BIO = full.full_user.about or ""
         await client(UpdateProfileRequest(about="💤 AFK | Jarvis Pro Mode"))
-    except: pass
+    except Exception as e: print(f"Bio xatosi: {e}")
+    IS_AFK = True
     await event.edit(f"**AFK PRO Yoqildi!** 💤")
+
+@client.on(events.NewMessage(pattern=r'\.unafk', outgoing=True))
+async def unafk_handler(event):
+    global IS_AFK
+    if not IS_AFK: return await event.edit("`Siz AFK emassiz.`")
+    IS_AFK = False
+    try: await client(UpdateProfileRequest(about=ORIGINAL_BIO))
+    except: pass
+    await event.edit("**AFK rejimi o'chirildi!** ✅")
+
+@client.on(events.NewMessage(pattern=r'\.status', outgoing=True))
+async def status_handler(event):
+    status = f"🤖 **Jarvis Status:**\n\n"
+    status += f"💤 **AFK:** `{'Yoqilgan' if IS_AFK else 'O\'chirilgan'}`\n"
+    status += f"🧠 **AI:** `{'Yoqilgan' if AI_ENABLED else 'O\'chirilgan'}`\n"
+    status += f"👥 **Guruhlar:** `{'Yoqilgan' if GROUPS_ENABLED else 'O\'chirilgan'}`"
+    await event.edit(status)
 
 @client.on(events.NewMessage(outgoing=True))
 async def back_handler(event):
     global IS_AFK
-    if IS_AFK and not event.text.startswith('.'):
+    if IS_AFK and event.text and not event.text.startswith('.'):
         IS_AFK = False
         try: await client(UpdateProfileRequest(about=ORIGINAL_BIO))
         except: pass
-        await event.respond("**Men qaytdim!**")
+        await event.respond("**Men qaytdim!** AFK rejimi avtomatik o'chirildi.")
 
 @client.on(events.NewMessage(incoming=True))
 async def auto_respond(event):

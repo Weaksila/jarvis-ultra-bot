@@ -23,10 +23,15 @@ def run_flask(): app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 # --- SOZLAMALAR ---
 api_id = 32894755
 api_hash = '67f6c4bfe4148ee90c1f54376a4da248'
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyBgYRya8IVvRgCX0TY_rY_cp8aLIxlQbkE")
+# DIQQAT: Xavfsizlik uchun API KEY endi faqat Environment Variables orqali olinadi
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 
-genai.configure(api_key=GEMINI_API_KEY)
+if not GEMINI_API_KEY:
+    print("❌ XATO: GEMINI_API_KEY topilmadi! Renderda Environment Variable o'rnating.")
+else:
+    genai.configure(api_key=GEMINI_API_KEY)
+
 model = genai.GenerativeModel('gemini-3.1-flash-lite')
 
 if SESSION_STRING:
@@ -86,8 +91,8 @@ async def ocr_handler(event):
     try:
         with PIL.Image.open(path) as img:
             img.load()
-            response = model.generate_content(["Ushbu rasmdagi barcha matnlarni aniq ko'chirib ber. Faqat matnni o'zini qaytar.", img])
-            await event.edit(f"📝 **Rasmdagi matn:**\n\n{response.text}")
+            response = model.generate_content(["Rasmdagi matnlarni ko'chirib ber.", img])
+            await event.edit(f"📝 **Matn:**\n\n{response.text}")
     except Exception as e: await event.edit(f"❌ Xatolik: {e}")
     if os.path.exists(path): os.remove(path)
 
@@ -158,7 +163,7 @@ async def auto_respond(event):
         if IS_AFK and event.is_private:
             await event.reply("Egam hozir bandlar.")
             return
-        if AI_ENABLED:
+        if AI_ENABLED and GEMINI_API_KEY:
             if uid not in user_locks: user_locks[uid] = asyncio.Lock()
             async with user_locks[uid]:
                 print(f"📩 Muloqot: {name}dan")

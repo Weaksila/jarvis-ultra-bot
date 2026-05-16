@@ -1,0 +1,6 @@
+telethon
+google-generativeai
+gtts
+Pillow
+yt-dlp
+flask

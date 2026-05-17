@@ -110,15 +110,15 @@ async def generate_with_rotation(content):
                 raise e
     # Barcha kalitlar tugadi — Saved Messages'ga xabar yuborish
     msg = (
-        "🚨 **JARVIS OGOHLANTIRISH**\n\n"
-        f"⚠️ Barcha **{len(API_KEYS)} ta** Gemini API kalit ishlamayapti yoki kunlik limitiga yetdi!\n\n"
-        f"Oxirgi xatolik: `{err}`\n\n"
-        "🔑 **Yechim:**\n"
-        "1. Yangi Google accountdan [aistudio.google.com](https://aistudio.google.com/app/apikey) kirib kalit oling.\n"
-        "2. Renderda `GEMINI_API_KEY_2` ga qo'shing\n"
+        "🚨 JARVIS OGOHLANTIRISH\n\n"
+        f"⚠️ Barcha {len(API_KEYS)} ta Gemini API kalit ishlamayapti yoki limitga yetdi!\n\n"
+        f"Oxirgi xatolik: {err}\n\n"
+        "🔑 Yechim:\n"
+        "1. Yangi Google accountdan aistudio.google.com kirib kalit oling.\n"
+        "2. Renderda GEMINI_API_KEY_2 ga qo'shing\n"
     )
     try:
-        await client.send_message("me", msg)
+        await client.send_message("me", msg, parse_mode=None)
         print("🚨 Barcha API kalitlar tugadi! Saved Messages'ga xabar yuborildi.", flush=True)
     except Exception as send_err:
         print(f"🚨 Barcha API kalitlar tugadi! Xabar yuborishda xato: {send_err}", flush=True)
@@ -419,10 +419,13 @@ async def auto_respond(event):
                     await asyncio.sleep(1.5); await event.reply(answer)
 
     except Exception as e: 
-        err_msg = str(e)
-        print(f"⚠️ Xato: {err_msg}", flush=True)
+        import traceback
+        err_msg = traceback.format_exc()
+        short_err = str(e)
+        print(f"⚠️ Xato:\n{err_msg}", flush=True)
         try:
-            await client.send_message("me", f"⚠️ **JARVIS XATOLIK!**\n👤 **Kim bilan:** {name}\n❌ **Xato turi:** `{err_msg}`")
+            # Markdown parse error oldini olish uchun parse_mode=None
+            await client.send_message("me", f"⚠️ JARVIS XATOLIK!\nKim bilan: {name}\n\nXato sababi:\n{short_err}", parse_mode=None)
         except: pass
 
 
@@ -430,13 +433,13 @@ async def auto_respond(event):
 async def startup_notification():
     try:
         msg = (
-            "✅ **JARVIS PRO ISHGA TUSHDI!**\n\n"
-            f"🔑 **API Kalitlar:** {len(API_KEYS)} ta\n"
-            "🌐 **Server:** Render (24/7)\n"
-            "🧠 **Model:** Gemini 1.5 Flash\n\n"
+            "✅ JARVIS PRO ISHGA TUSHDI!\n\n"
+            f"🔑 API Kalitlar: {len(API_KEYS)} ta\n"
+            "🌐 Server: Render (24/7)\n"
+            "🧠 Model: Gemini 1.5 Flash\n\n"
             "Men ishlashga to'liq tayyorman! Xatolik bo'lsa darhol shu yerga yozaman."
         )
-        await client.send_message("me", msg)
+        await client.send_message("me", msg, parse_mode=None)
     except Exception as e:
         print(f"Startup xabarida xato: {e}")
 

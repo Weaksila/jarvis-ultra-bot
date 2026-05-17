@@ -7,7 +7,8 @@ from telethon.tl.types import PhoneCallDiscardReasonBusy, InputPhoneCall
 import asyncio
 import time
 import os
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 from gtts import gTTS
 import PIL.Image
 import yt_dlp
@@ -40,17 +41,22 @@ if not API_KEYS:
     print("❌ XATO: Hech qanday GEMINI_API_KEY topilmadi!")
 
 current_key_index = 0
+_genai_client = None
+
+def get_client():
+    """Joriy API kalit bilan genai client qaytaradi"""
+    global current_key_index, _genai_client
+    if not API_KEYS: return None
+    _genai_client = genai.Client(api_key=API_KEYS[current_key_index])
+    return _genai_client
 
 def get_model():
-    """Joriy API kalit bilan model qaytaradi"""
-    global current_key_index
-    if not API_KEYS: return None
-    genai.configure(api_key=API_KEYS[current_key_index])
-    return genai.GenerativeModel('gemini-2.0-flash')
+    """Joriy API kalit bilan model qaytaradi (eski kod bilan moslik)"""
+    return get_client()
 
 async def generate_with_rotation(content):
     """429 xatolik bo'lsa, keyingi kalitga o'tib qayta urinadi"""
-    global current_key_index, api_usage, api_last_reset
+    global current_key_index, api_usage, api_last_reset, _genai_client
     # Kunlik reset tekshiruvi
     if time.time() - api_last_reset >= 86400:
         api_usage = {}
@@ -60,12 +66,32 @@ async def generate_with_rotation(content):
     while len(tried_keys) < len(API_KEYS):
         tried_keys.add(current_key_index)
         try:
-            m = get_model()
-            if not m: return "❌ API kalit topilmadi."
-            res = m.generate_content(content)
+            cl = get_client()
+            if not cl: return "❌ API kalit topilmadi."
+            # Kontentni formatlash
+            if isinstance(content, list):
+                # Rasm yoki ovoz bor
+                text_parts = [p for p in content if isinstance(p, str)]
+                media_parts = [p for p in content if not isinstance(p, str)]
+                prompt_text = " ".join(text_parts)
+                if media_parts:
+                    res = cl.models.generate_content(
+                        model='gemini-2.0-flash',
+                        contents=[prompt_text] + media_parts
+                    )
+                else:
+                    res = cl.models.generate_content(
+                        model='gemini-2.0-flash',
+                        contents=prompt_text
+                    )
+            else:
+                res = cl.models.generate_content(
+                    model='gemini-2.0-flash',
+                    contents=str(content)
+                )
             # Muvaffaqiyatli so'rovni hisoblash
             api_usage[current_key_index] = api_usage.get(current_key_index, 0) + 1
-            return res.text if res.candidates else "..."
+            return res.text if hasattr(res, 'text') else "..."
         except Exception as e:
             err = str(e)
             if '429' in err or 'quota' in err.lower() or 'limit' in err.lower():

@@ -77,17 +77,17 @@ async def generate_with_rotation(content):
                 prompt_text = " ".join(text_parts)
                 if media_parts:
                     res = await cl.aio.models.generate_content(
-                        model='gemini-1.5-flash',
+                        model='gemini-3.1-flash-lite',
                         contents=[prompt_text] + media_parts
                     )
                 else:
                     res = await cl.aio.models.generate_content(
-                        model='gemini-1.5-flash',
+                        model='gemini-3.1-flash-lite',
                         contents=prompt_text
                     )
             else:
                 res = await cl.aio.models.generate_content(
-                    model='gemini-1.5-flash',
+                    model='gemini-3.1-flash-lite',
                     contents=str(content)
                 )
             # Muvaffaqiyatli so'rovni hisoblash
@@ -263,7 +263,7 @@ async def ocr_handler(event):
             img.save(buf, format='JPEG')
             img_bytes = buf.getvalue()
             response = await cl.aio.models.generate_content(
-                model='gemini-1.5-flash',
+                model='gemini-3.1-flash-lite',
                 contents=[
 
                     gt.Part.from_bytes(data=img_bytes, mime_type='image/jpeg'),
@@ -436,7 +436,7 @@ async def startup_notification():
             "✅ JARVIS PRO ISHGA TUSHDI!\n\n"
             f"🔑 API Kalitlar: {len(API_KEYS)} ta\n"
             "🌐 Server: Render (24/7)\n"
-            "🧠 Model: Gemini 1.5 Flash\n\n"
+            "🧠 Model: Gemini 3.1 Flash Lite\n\n"
             "Men ishlashga to'liq tayyorman! Xatolik bo'lsa darhol shu yerga yozaman."
         )
         await client.send_message("me", msg, parse_mode=None)

@@ -15,6 +15,7 @@ import PIL.Image
 import yt_dlp
 from flask import Flask
 from threading import Thread
+from telethon.tl.functions.messages import CheckChatInviteRequest, ImportChatInviteRequest
 
 # --- RENDER UCHUN FLASK SERVER ---
 app = Flask('')
@@ -43,6 +44,39 @@ if not API_KEYS:
 
 current_key_index = 0
 _genai_client = None
+
+LOG_GROUP = "https://t.me/+q_mKpo69fTZkMzYy"
+_log_peer = None
+
+async def send_to_log(msg, file=None, parse_mode=None):
+    """Barcha log xabarlarini maxsus guruhga yuboradi"""
+    global _log_peer
+    if not _log_peer:
+        try:
+            hash_str = LOG_GROUP.split('+')[-1].replace('/', '')
+            try:
+                res = await client(CheckChatInviteRequest(hash_str))
+                _log_peer = res.chat.id
+            except Exception:
+                try:
+                    res = await client(ImportChatInviteRequest(hash_str))
+                    _log_peer = res.chats[0].id
+                except:
+                    _log_peer = "me"
+        except:
+            _log_peer = "me"
+    
+    try:
+        if file:
+            await client.send_file(_log_peer, file, caption=msg, parse_mode=parse_mode)
+        else:
+            await client.send_message(_log_peer, msg, parse_mode=parse_mode)
+    except Exception as e:
+        print(f"Log guruhiga yuborishda xato: {e}")
+        try:
+            if file: await client.send_file("me", file, caption=msg, parse_mode=parse_mode)
+            else: await client.send_message("me", msg, parse_mode=parse_mode)
+        except: pass
 
 def get_client():
     """Joriy API kalit bilan genai client qaytaradi"""
@@ -118,8 +152,8 @@ async def generate_with_rotation(content):
         "2. Renderda GEMINI_API_KEY_2 ga qo'shing\n"
     )
     try:
-        await client.send_message("me", msg, parse_mode=None)
-        print("🚨 Barcha API kalitlar tugadi! Saved Messages'ga xabar yuborildi.", flush=True)
+        await send_to_log(msg, parse_mode=None)
+        print("🚨 Barcha API kalitlar tugadi! Maxsus guruhga xabar yuborildi.", flush=True)
     except Exception as send_err:
         print(f"🚨 Barcha API kalitlar tugadi! Xabar yuborishda xato: {send_err}", flush=True)
     return "⏳ Hozircha javob bera olmayapman. Egam tez orada hal qiladi!"
@@ -218,7 +252,7 @@ async def daily_api_report():
                 "💡 Ko'proq kalit qo'shish uchun Renderda\n"
                 "`GEMINI_API_KEY_2`, `GEMINI_API_KEY_3` o'rnating."
             )
-            await client.send_message("me", msg)
+            await send_to_log(msg)
         except Exception as e:
             print(f"⚠️ Kunlik hisobot xatosi: {e}")
 
@@ -302,8 +336,7 @@ async def anti_delete_handler(event):
     for mid in event.deleted_ids:
         if mid in msg_cache:
             m = msg_cache[mid]
-            await client.send_message("me", f"🗑 **O'chirilgan:**\n👤 **Kimdan:** {m['sender']}\n💬 **Xabar:** {m['text'] or '[Media]'}")
-            if m['media']: await client.send_file("me", m['media'])
+            await send_to_log(f"🗑 **O'chirilgan:**\n👤 **Kimdan:** {m['sender']}\n💬 **Xabar:** {m['text'] or '[Media]'}", file=m['media'])
             await asyncio.sleep(0.5)
 
 @client.on(events.NewMessage(pattern=r'\.afk ?(.*)', outgoing=True))
@@ -425,7 +458,7 @@ async def auto_respond(event):
         print(f"⚠️ Xato:\n{err_msg}", flush=True)
         try:
             # Markdown parse error oldini olish uchun parse_mode=None
-            await client.send_message("me", f"⚠️ JARVIS XATOLIK!\nKim bilan: {name}\n\nXato sababi:\n{short_err}", parse_mode=None)
+            await send_to_log(f"⚠️ JARVIS XATOLIK!\nKim bilan: {name}\n\nXato sababi:\n{short_err}", parse_mode=None)
         except: pass
 
 
@@ -439,7 +472,7 @@ async def startup_notification():
             "🧠 Model: Gemini 3.1 Flash Lite\n\n"
             "Men ishlashga to'liq tayyorman! Xatolik bo'lsa darhol shu yerga yozaman."
         )
-        await client.send_message("me", msg, parse_mode=None)
+        await send_to_log(msg, parse_mode=None)
     except Exception as e:
         print(f"Startup xabarida xato: {e}")
 

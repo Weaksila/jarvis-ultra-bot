@@ -50,7 +50,12 @@ def get_model():
 
 async def generate_with_rotation(content):
     """429 xatolik bo'lsa, keyingi kalitga o'tib qayta urinadi"""
-    global current_key_index
+    global current_key_index, api_usage, api_last_reset
+    # Kunlik reset tekshiruvi
+    if time.time() - api_last_reset >= 86400:
+        api_usage = {}
+        api_last_reset = time.time()
+        print("🔄 API kunlik limit resetlandi!")
     tried_keys = set()
     while len(tried_keys) < len(API_KEYS):
         tried_keys.add(current_key_index)
@@ -58,6 +63,8 @@ async def generate_with_rotation(content):
             m = get_model()
             if not m: return "❌ API kalit topilmadi."
             res = m.generate_content(content)
+            # Muvaffaqiyatli so'rovni hisoblash
+            api_usage[current_key_index] = api_usage.get(current_key_index, 0) + 1
             return res.text if res.candidates else "..."
         except Exception as e:
             err = str(e)
@@ -103,6 +110,37 @@ user_locks = {}
 conversation_history = {}  # Har bir foydalanuvchi uchun suhbat tarixi
 MAX_HISTORY = 20  # Har bir foydalanuvchi uchun max xabar soni
 
+# API Usage Tracker
+DAILY_LIMIT = 1500  # Gemini bepul limit (kuniga)
+api_usage = {}  # {kalit_index: so'rovlar_soni}
+api_last_reset = time.time()  # Oxirgi reset vaqti
+
+def get_usage_report():
+    """Barcha kalitlar uchun foizli hisobot"""
+    lines = []
+    total_used = 0
+    total_limit = len(API_KEYS) * DAILY_LIMIT
+    for i, key in enumerate(API_KEYS):
+        used = api_usage.get(i, 0)
+        total_used += used
+        remaining = max(0, DAILY_LIMIT - used)
+        pct_used = min(100, (used / DAILY_LIMIT) * 100)
+        pct_left = 100 - pct_used
+        # Progress bar
+        filled = int(pct_left / 10)
+        bar = '█' * filled + '░' * (10 - filled)
+        status = '✅' if pct_left > 30 else ('⚠️' if pct_left > 0 else '❌')
+        short_key = f"...{key[-6:]}"  # Xavfsizlik uchun faqat oxirgi 6 ta belgi
+        lines.append(f"{status} **Kalit {i+1}** `{short_key}`\n   [{bar}] `{pct_left:.0f}%` qoldi ({remaining}/{DAILY_LIMIT})") 
+    total_pct = max(0, 100 - (total_used / total_limit * 100)) if total_limit > 0 else 0
+    total_bar_filled = int(total_pct / 10)
+    total_bar = '█' * total_bar_filled + '░' * (10 - total_bar_filled)
+    summary = f"\n📊 **Jami:** [{total_bar}] `{total_pct:.0f}%` qoldi"
+    import datetime
+    reset_time = datetime.datetime.utcfromtimestamp(api_last_reset + 86400).strftime('%H:%M UTC')
+    return "\n".join(lines) + summary + f"\n⏰ **Reset vaqti:** {reset_time}"
+
+
 
 # --- YORDAMCHI FUNKSIYALAR ---
 async def send_as_voice(chat_id, text):
@@ -115,12 +153,45 @@ async def send_as_voice(chat_id, text):
     except Exception as e: print(f"❌ Ovoz xatosi: {e}")
 
 # --- BUYRUQLAR ---
+@client.on(events.NewMessage(pattern=r'\.apistatus', outgoing=True))
+async def api_status_handler(event):
+    await event.edit("`API holati tekshirilmoqda...` 🔍")
+    if not API_KEYS:
+        return await event.edit("❌ API kalitlar topilmadi!")
+    report = get_usage_report()
+    msg = f"🔑 **GEMINI API HOLATI**\n\n{report}"
+    await event.edit(msg)
+
 @client.on(events.NewMessage(pattern=r'\.groups (on|off)', outgoing=True))
 async def groups_toggle(event):
     global GROUPS_ENABLED
     GROUPS_ENABLED = (event.pattern_match.group(1) == "on")
     text = "Yoqildi" if GROUPS_ENABLED else "O'chirildi"
     await event.edit(f"**Guruhlarda AI javob berish:** `{text}`")
+
+async def daily_api_report():
+    """Har kuni soat 08:00 UTC da Saved Messages'ga hisobot yuboradi"""
+    import datetime
+    while True:
+        now = datetime.datetime.utcnow()
+        # Keyingi soat 08:00 UTC gacha kutish
+        target = now.replace(hour=8, minute=0, second=0, microsecond=0)
+        if now >= target:
+            target += datetime.timedelta(days=1)
+        wait_seconds = (target - now).total_seconds()
+        await asyncio.sleep(wait_seconds)
+        try:
+            report = get_usage_report()
+            msg = (
+                "📊 **KUNLIK API HISOBOTI**\n\n"
+                f"{report}\n\n"
+                "💡 Ko'proq kalit qo'shish uchun Renderda\n"
+                "`GEMINI_API_KEY_2`, `GEMINI_API_KEY_3` o'rnating."
+            )
+            await client.send_message("me", msg)
+        except Exception as e:
+            print(f"⚠️ Kunlik hisobot xatosi: {e}")
+
 
 @client.on(events.NewMessage(pattern=r'\.dl (.*)', outgoing=True))
 async def download_handler(event):
@@ -295,6 +366,10 @@ async def auto_respond(event):
 # --- ISHGA TUSHIRISH ---
 if __name__ == '__main__':
     Thread(target=run_flask).start()
-    print("Jarvis Render Edition ishga tushishga tayyor...")
+    print("Jarvis PRO Edition ishga tushishga tayyor...")
     client.start()
+    # Kunlik hisobot vazifasini fonda ishga tushirish
+    loop = client.loop
+    loop.create_task(daily_api_report())
+    print(f"✅ {len(API_KEYS)} ta API kalit yuklandi. Kunlik hisobot 08:00 UTC da yuboriladi.")
     client.run_until_disconnected()

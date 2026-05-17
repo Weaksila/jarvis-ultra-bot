@@ -50,29 +50,13 @@ _log_peer = None
 
 async def send_to_log(msg, file=None, parse_mode=None):
     """Barcha log xabarlarini maxsus guruhga yuboradi"""
-    global _log_peer
-    if not _log_peer:
-        try:
-            hash_str = LOG_GROUP.split('+')[-1].replace('/', '')
-            try:
-                res = await client(CheckChatInviteRequest(hash_str))
-                _log_peer = res.chat.id
-            except Exception:
-                try:
-                    res = await client(ImportChatInviteRequest(hash_str))
-                    _log_peer = res.chats[0].id
-                except:
-                    _log_peer = "me"
-        except:
-            _log_peer = "me"
-    
     try:
         if file:
-            await client.send_file(_log_peer, file, caption=msg, parse_mode=parse_mode)
+            await client.send_file(LOG_GROUP, file, caption=msg, parse_mode=parse_mode)
         else:
-            await client.send_message(_log_peer, msg, parse_mode=parse_mode)
+            await client.send_message(LOG_GROUP, msg, parse_mode=parse_mode)
     except Exception as e:
-        print(f"Log guruhiga yuborishda xato: {e}")
+        print(f"Log guruhiga yuborishda xato: {e}", flush=True)
         try:
             if file: await client.send_file("me", file, caption=msg, parse_mode=parse_mode)
             else: await client.send_message("me", msg, parse_mode=parse_mode)
@@ -97,7 +81,8 @@ async def generate_with_rotation(content):
         api_usage = {}
         api_last_reset = time.time()
         print("🔄 API kunlik limit resetlandi!", flush=True)
-
+    
+    err = "API kalit topilmadi yoki barcha urinishlar muvaffaqiyatsiz bo'ldi."
     tried_keys = set()
     while len(tried_keys) < len(API_KEYS):
         tried_keys.add(current_key_index)

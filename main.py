@@ -62,13 +62,27 @@ async def generate_with_rotation(content):
         except Exception as e:
             err = str(e)
             if '429' in err or 'quota' in err.lower() or 'limit' in err.lower():
-                # Keyingi kalitga o'tish
+                old_index = current_key_index + 1
                 current_key_index = (current_key_index + 1) % len(API_KEYS)
-                print(f"⚠️ API limit! {current_key_index+1}-kalitga o'tildi.")
+                print(f"⚠️ API limit! {old_index}-kalit tugadi, {current_key_index+1}-kalitga o'tildi.")
                 await asyncio.sleep(1)
             else:
                 raise e
-    return "⏳ Barcha API kalitlar limitiga yetdi. Biroz kutib yuboring."
+    # Barcha kalitlar tugadi — Saved Messages'ga xabar yuborish
+    msg = (
+        "🚨 **JARVIS OGOHLANTIRISH**\n\n"
+        f"⚠️ Barcha **{len(API_KEYS)} ta** Gemini API kalit kunlik limitiga yetdi!\n\n"
+        "🔑 **Yechim:**\n"
+        "1. [aistudio.google.com](https://aistudio.google.com/app/apikey) dan yangi kalit oling\n"
+        "2. Renderda `GEMINI_API_KEY` yoki `GEMINI_API_KEY_2` ga qo'shing\n\n"
+        "⏰ Limitlar har kuni **soat 00:00 UTC** da yangilanadi."
+    )
+    try:
+        await client.send_message("me", msg)
+        print("🚨 Barcha API kalitlar tugadi! Saved Messages'ga xabar yuborildi.")
+    except Exception as send_err:
+        print(f"🚨 Barcha API kalitlar tugadi! Xabar yuborishda xato: {send_err}")
+    return "⏳ Hozircha javob bera olmayapman. Egam tez orada hal qiladi!"
 
 model = get_model()
 

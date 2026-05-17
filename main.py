@@ -7,6 +7,7 @@ from telethon.tl.types import PhoneCallDiscardReasonBusy, InputPhoneCall
 import asyncio
 import time
 import os
+import datetime
 from google import genai
 from google.genai import types as gt
 from gtts import gTTS
@@ -90,7 +91,11 @@ async def generate_with_rotation(content):
                 )
             # Muvaffaqiyatli so'rovni hisoblash
             api_usage[current_key_index] = api_usage.get(current_key_index, 0) + 1
-            return res.text if hasattr(res, 'text') else "..."
+            try:
+                return res.text
+            except ValueError:
+                return "⚠️ Kechirasiz, ushbu xabarga xavfsizlik filtri sababli javob bera olmayman."
+
         except Exception as e:
             err = str(e)
             if '429' in err or 'quota' in err.lower() or 'limit' in err.lower():
@@ -160,7 +165,6 @@ def get_usage_report():
     total_bar_filled = int(total_pct / 10)
     total_bar = '█' * total_bar_filled + '░' * (10 - total_bar_filled)
     summary = f"\n📊 **Jami:** [{total_bar}] `{total_pct:.0f}%` qoldi"
-    import datetime
     reset_time = datetime.datetime.utcfromtimestamp(api_last_reset + 86400).strftime('%H:%M UTC')
     return "\n".join(lines) + summary + f"\n⏰ **Reset vaqti:** {reset_time}"
 
@@ -195,7 +199,6 @@ async def groups_toggle(event):
 
 async def daily_api_report():
     """Har kuni soat 08:00 UTC da Saved Messages'ga hisobot yuboradi"""
-    import datetime
     while True:
         now = datetime.datetime.utcnow()
         # Keyingi soat 08:00 UTC gacha kutish
@@ -228,9 +231,18 @@ async def download_handler(event):
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             await client.send_file(event.chat_id, filename, caption=f"🎬 **Downloader**\n🔗 {url}")
-            if os.path.exists(filename): os.remove(filename)
             await event.delete()
-    except Exception as e: await event.edit(f"❌ Xato: {e}")
+    except Exception as e: 
+        await event.edit(f"❌ Xato: {e}")
+    finally:
+        # Har qanday holatda ham diskda fayl qolib ketmasligini kafolatlash
+        try:
+            if 'filename' in locals() and os.path.exists(filename):
+                os.remove(filename)
+            elif os.path.exists(unique_name + ".mp4"): os.remove(unique_name + ".mp4")
+            elif os.path.exists(unique_name + ".webm"): os.remove(unique_name + ".webm")
+        except: pass
+
 
 @client.on(events.NewMessage(pattern=r'\.ocr', outgoing=True))
 async def ocr_handler(event):

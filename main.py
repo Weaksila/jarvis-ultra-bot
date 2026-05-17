@@ -8,7 +8,7 @@ import asyncio
 import time
 import os
 from google import genai
-from google.genai import types as genai_types
+from google.genai import types as gt
 from gtts import gTTS
 import PIL.Image
 import yt_dlp
@@ -70,22 +70,21 @@ async def generate_with_rotation(content):
             if not cl: return "❌ API kalit topilmadi."
             # Kontentni formatlash
             if isinstance(content, list):
-                # Rasm yoki ovoz bor
                 text_parts = [p for p in content if isinstance(p, str)]
                 media_parts = [p for p in content if not isinstance(p, str)]
                 prompt_text = " ".join(text_parts)
                 if media_parts:
-                    res = cl.models.generate_content(
+                    res = await cl.aio.models.generate_content(
                         model='gemini-2.0-flash',
                         contents=[prompt_text] + media_parts
                     )
                 else:
-                    res = cl.models.generate_content(
+                    res = await cl.aio.models.generate_content(
                         model='gemini-2.0-flash',
                         contents=prompt_text
                     )
             else:
-                res = cl.models.generate_content(
+                res = await cl.aio.models.generate_content(
                     model='gemini-2.0-flash',
                     contents=str(content)
                 )
@@ -117,7 +116,6 @@ async def generate_with_rotation(content):
         print(f"🚨 Barcha API kalitlar tugadi! Xabar yuborishda xato: {send_err}")
     return "⏳ Hozircha javob bera olmayapman. Egam tez orada hal qiladi!"
 
-model = get_model()
 
 if SESSION_STRING:
     client = TelegramClient(StringSession(SESSION_STRING), api_id, api_hash)
@@ -245,12 +243,11 @@ async def ocr_handler(event):
         cl = get_client()
         with PIL.Image.open(path) as img:
             img.load()
-            import base64, io
+            import io
             buf = io.BytesIO()
             img.save(buf, format='JPEG')
             img_bytes = buf.getvalue()
-            from google.genai import types as gt
-            response = cl.models.generate_content(
+            response = await cl.aio.models.generate_content(
                 model='gemini-2.0-flash',
                 contents=[
                     gt.Part.from_bytes(data=img_bytes, mime_type='image/jpeg'),

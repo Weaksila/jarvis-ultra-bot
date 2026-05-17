@@ -429,18 +429,30 @@ async def auto_respond(event):
                 
                 content = [full_prompt]
                 if event.photo:
-                    p = await event.download_media(); img = PIL.Image.open(p); img.load(); content.append(img)
-                    answer = await generate_with_rotation(content); os.remove(p)
+                    p = await event.download_media()
+                    try:
+                        with PIL.Image.open(p) as img:
+                            img.load()
+                            import io
+                            buf = io.BytesIO()
+                            img.save(buf, format='JPEG')
+                            content.append(gt.Part.from_bytes(data=buf.getvalue(), mime_type='image/jpeg'))
+                    except Exception as e:
+                        print(f"Rasm yuklashda xato: {e}", flush=True)
+                    finally:
+                        if os.path.exists(p): os.remove(p)
+                    answer = await generate_with_rotation(content)
                 elif event.voice:
                     p = await event.download_media()
                     try:
                         with open(p, 'rb') as f:
                             audio_bytes = f.read()
-                        from google.genai import types as gt
                         content.append(gt.Part.from_bytes(data=audio_bytes, mime_type='audio/ogg'))
-                    except: pass
+                    except Exception as e:
+                        print(f"Ovoz yuklashda xato: {e}", flush=True)
+                    finally:
+                        if os.path.exists(p): os.remove(p)
                     answer = await generate_with_rotation(content)
-                    if os.path.exists(p): os.remove(p)
                 else:
                     answer = await generate_with_rotation(content)
                 

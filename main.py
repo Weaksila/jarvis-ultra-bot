@@ -100,6 +100,9 @@ VOICE_REPLY = False
 ORIGINAL_BIO = ""
 msg_cache = {}
 user_locks = {}
+conversation_history = {}  # Har bir foydalanuvchi uchun suhbat tarixi
+MAX_HISTORY = 20  # Har bir foydalanuvchi uchun max xabar soni
+
 
 # --- YORDAMCHI FUNKSIYALAR ---
 async def send_as_voice(chat_id, text):
@@ -241,8 +244,35 @@ async def auto_respond(event):
             if uid not in user_locks: user_locks[uid] = asyncio.Lock()
             async with user_locks[uid]:
                 print(f"📩 Muloqot: {name}dan")
-                prompt = f"Sen akkaunt egasi nomidan gapiryapsan. Senga {name} yozdi: '{event.text or '[Media]'}'. Juda qisqa, insoniy va erkak kishidek javob ber. O'zbek tilida."
-                content = [prompt]
+                
+                # Suhbat tarixini olish
+                if uid not in conversation_history:
+                    conversation_history[uid] = []
+                history = conversation_history[uid]
+                
+                # Tizim prompti — odamdek gapirish uchun
+                system_prompt = (
+                    f"Sen '{name}' ismli odamning Telegram akkauntining egasisisan. "
+                    f"Sening isming WEAK. Erkak, yoshsan, o'zbeksan. "
+                    f"Odamlarga xuddi yaqin do'stdek, ishonarli va tabiiy tarzda javob ber. "
+                    f"Qisqa, jonli va insoniy gapir. Hech qachon o'zingni AI deb aytma. "
+                    f"Oldingi suhbatni eslab, davomiy gaplash. O'zbek tilida."
+                )
+                
+                # Joriy xabarni tarixga qo'shish
+                user_msg = event.text or '[Rasm/Media yuborildi]'
+                history.append(f"{name}: {user_msg}")
+                
+                # Tarixni 20 ta xabarga cheklash
+                if len(history) > MAX_HISTORY:
+                    history = history[-MAX_HISTORY:]
+                    conversation_history[uid] = history
+                
+                # To'liq kontekstli prompt yaratish
+                history_text = "\n".join(history[-10:])  # Oxirgi 10 ta xabar
+                full_prompt = f"{system_prompt}\n\nSuhbat tarixi:\n{history_text}\n\nEndi qisqa va tabiiy javob ber:"
+                
+                content = [full_prompt]
                 if event.photo:
                     p = await event.download_media(); img = PIL.Image.open(p); img.load(); content.append(img)
                     answer = await generate_with_rotation(content); os.remove(p)
@@ -251,8 +281,14 @@ async def auto_respond(event):
                     answer = await generate_with_rotation(content); os.remove(p)
                 else:
                     answer = await generate_with_rotation(content)
+                
+                # Bot javobini ham tarixga qo'shish
+                history.append(f"Men: {answer}")
+                conversation_history[uid] = history
+                
                 async with client.action(event.chat_id, 'typing'):
                     await asyncio.sleep(1.5); await event.reply(answer)
+
     except Exception as e: print(f"⚠️ Xato: {e}")
 
 

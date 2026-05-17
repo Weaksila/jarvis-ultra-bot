@@ -62,7 +62,8 @@ async def generate_with_rotation(content):
     if time.time() - api_last_reset >= 86400:
         api_usage = {}
         api_last_reset = time.time()
-        print("🔄 API kunlik limit resetlandi!")
+        print("🔄 API kunlik limit resetlandi!", flush=True)
+
     tried_keys = set()
     while len(tried_keys) < len(API_KEYS):
         tried_keys.add(current_key_index)
@@ -76,17 +77,17 @@ async def generate_with_rotation(content):
                 prompt_text = " ".join(text_parts)
                 if media_parts:
                     res = await cl.aio.models.generate_content(
-                        model='gemini-2.0-flash',
+                        model='gemini-1.5-flash',
                         contents=[prompt_text] + media_parts
                     )
                 else:
                     res = await cl.aio.models.generate_content(
-                        model='gemini-2.0-flash',
+                        model='gemini-1.5-flash',
                         contents=prompt_text
                     )
             else:
                 res = await cl.aio.models.generate_content(
-                    model='gemini-2.0-flash',
+                    model='gemini-1.5-flash',
                     contents=str(content)
                 )
             # Muvaffaqiyatli so'rovni hisoblash
@@ -98,27 +99,29 @@ async def generate_with_rotation(content):
 
         except Exception as e:
             err = str(e)
-            if '429' in err or 'quota' in err.lower() or 'limit' in err.lower():
+            if '429' in err or 'quota' in err.lower() or 'limit' in err.lower() or 'resource_exhausted' in err.lower():
                 old_index = current_key_index + 1
                 current_key_index = (current_key_index + 1) % len(API_KEYS)
-                print(f"⚠️ API limit! {old_index}-kalit tugadi, {current_key_index+1}-kalitga o'tildi.")
+                print(f"⚠️ API limit! {old_index}-kalit tugadi, {current_key_index+1}-kalitga o'tildi. Xato: {err}", flush=True)
                 await asyncio.sleep(1)
             else:
+                # Kutilmagan API xatolarini ham logga chiqarish
+                print(f"❌ Kutilmagan API xatosi: {err}", flush=True)
                 raise e
     # Barcha kalitlar tugadi — Saved Messages'ga xabar yuborish
     msg = (
         "🚨 **JARVIS OGOHLANTIRISH**\n\n"
-        f"⚠️ Barcha **{len(API_KEYS)} ta** Gemini API kalit kunlik limitiga yetdi!\n\n"
+        f"⚠️ Barcha **{len(API_KEYS)} ta** Gemini API kalit ishlamayapti yoki kunlik limitiga yetdi!\n\n"
+        f"Oxirgi xatolik: `{err}`\n\n"
         "🔑 **Yechim:**\n"
-        "1. [aistudio.google.com](https://aistudio.google.com/app/apikey) dan yangi kalit oling\n"
-        "2. Renderda `GEMINI_API_KEY` yoki `GEMINI_API_KEY_2` ga qo'shing\n\n"
-        "⏰ Limitlar har kuni **soat 00:00 UTC** da yangilanadi."
+        "1. Yangi Google accountdan [aistudio.google.com](https://aistudio.google.com/app/apikey) kirib kalit oling.\n"
+        "2. Renderda `GEMINI_API_KEY_2` ga qo'shing\n"
     )
     try:
         await client.send_message("me", msg)
-        print("🚨 Barcha API kalitlar tugadi! Saved Messages'ga xabar yuborildi.")
+        print("🚨 Barcha API kalitlar tugadi! Saved Messages'ga xabar yuborildi.", flush=True)
     except Exception as send_err:
-        print(f"🚨 Barcha API kalitlar tugadi! Xabar yuborishda xato: {send_err}")
+        print(f"🚨 Barcha API kalitlar tugadi! Xabar yuborishda xato: {send_err}", flush=True)
     return "⏳ Hozircha javob bera olmayapman. Egam tez orada hal qiladi!"
 
 
@@ -260,8 +263,9 @@ async def ocr_handler(event):
             img.save(buf, format='JPEG')
             img_bytes = buf.getvalue()
             response = await cl.aio.models.generate_content(
-                model='gemini-2.0-flash',
+                model='gemini-1.5-flash',
                 contents=[
+
                     gt.Part.from_bytes(data=img_bytes, mime_type='image/jpeg'),
                     "Rasmdagi barcha matnlarni aniq ko'chirib ber."
                 ]
@@ -361,7 +365,7 @@ async def auto_respond(event):
         if AI_ENABLED and API_KEYS:
             if uid not in user_locks: user_locks[uid] = asyncio.Lock()
             async with user_locks[uid]:
-                print(f"📩 Muloqot: {name}dan")
+                print(f"📩 Muloqot: {name}dan", flush=True)
                 
                 # Suhbat tarixini olish
                 if uid not in conversation_history:
@@ -414,16 +418,16 @@ async def auto_respond(event):
                 async with client.action(event.chat_id, 'typing'):
                     await asyncio.sleep(1.5); await event.reply(answer)
 
-    except Exception as e: print(f"⚠️ Xato: {e}")
+    except Exception as e: print(f"⚠️ Xato: {e}", flush=True)
 
 
 # --- ISHGA TUSHIRISH ---
 if __name__ == '__main__':
     Thread(target=run_flask).start()
-    print("Jarvis PRO Edition ishga tushishga tayyor...")
+    print("Jarvis PRO Edition ishga tushishga tayyor...", flush=True)
     client.start()
     # Kunlik hisobot vazifasini fonda ishga tushirish
     loop = client.loop
     loop.create_task(daily_api_report())
-    print(f"✅ {len(API_KEYS)} ta API kalit yuklandi. Kunlik hisobot 08:00 UTC da yuboriladi.")
+    print(f"✅ {len(API_KEYS)} ta API kalit yuklandi. Kunlik hisobot 08:00 UTC da yuboriladi.", flush=True)
     client.run_until_disconnected()

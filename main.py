@@ -23,16 +23,54 @@ def run_flask(): app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 # --- SOZLAMALAR ---
 api_id = 32894755
 api_hash = '67f6c4bfe4148ee90c1f54376a4da248'
-# DIQQAT: Xavfsizlik uchun API KEY endi faqat Environment Variables orqali olinadi
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 
-if not GEMINI_API_KEY:
-    print("❌ XATO: GEMINI_API_KEY topilmadi! Renderda Environment Variable o'rnating.")
-else:
-    genai.configure(api_key=GEMINI_API_KEY)
+# --- MULTI-API KEY ROTATION TIZIMI ---
+# Renderda GEMINI_API_KEY_1, GEMINI_API_KEY_2, GEMINI_API_KEY_3 ... o'rnating
+# Yoki oddiy GEMINI_API_KEY ham ishlaydi
+API_KEYS = []
+for i in range(1, 11):  # 10 tagacha kalit qo'llab-quvvatlaydi
+    key = os.environ.get(f"GEMINI_API_KEY_{i}")
+    if key: API_KEYS.append(key)
+if not API_KEYS:  # Agar numbered kalitlar yo'q bo'lsa, oddiy kalitni oladi
+    single_key = os.environ.get("GEMINI_API_KEY")
+    if single_key: API_KEYS.append(single_key)
 
-model = genai.GenerativeModel('gemini-3.1-flash-lite')
+if not API_KEYS:
+    print("❌ XATO: Hech qanday GEMINI_API_KEY topilmadi!")
+
+current_key_index = 0
+
+def get_model():
+    """Joriy API kalit bilan model qaytaradi"""
+    global current_key_index
+    if not API_KEYS: return None
+    genai.configure(api_key=API_KEYS[current_key_index])
+    return genai.GenerativeModel('gemini-2.0-flash')
+
+async def generate_with_rotation(content):
+    """429 xatolik bo'lsa, keyingi kalitga o'tib qayta urinadi"""
+    global current_key_index
+    tried_keys = set()
+    while len(tried_keys) < len(API_KEYS):
+        tried_keys.add(current_key_index)
+        try:
+            m = get_model()
+            if not m: return "❌ API kalit topilmadi."
+            res = m.generate_content(content)
+            return res.text if res.candidates else "..."
+        except Exception as e:
+            err = str(e)
+            if '429' in err or 'quota' in err.lower() or 'limit' in err.lower():
+                # Keyingi kalitga o'tish
+                current_key_index = (current_key_index + 1) % len(API_KEYS)
+                print(f"⚠️ API limit! {current_key_index+1}-kalitga o'tildi.")
+                await asyncio.sleep(1)
+            else:
+                raise e
+    return "⏳ Barcha API kalitlar limitiga yetdi. Biroz kutib yuboring."
+
+model = get_model()
 
 if SESSION_STRING:
     client = TelegramClient(StringSession(SESSION_STRING), api_id, api_hash)
@@ -185,21 +223,24 @@ async def auto_respond(event):
         if IS_AFK and event.is_private:
             await event.reply("Egam hozir bandlar.")
             return
-        if AI_ENABLED and GEMINI_API_KEY:
+        if AI_ENABLED and API_KEYS:
             if uid not in user_locks: user_locks[uid] = asyncio.Lock()
             async with user_locks[uid]:
                 print(f"📩 Muloqot: {name}dan")
                 prompt = f"Sen akkaunt egasi nomidan gapiryapsan. Senga {name} yozdi: '{event.text or '[Media]'}'. Juda qisqa, insoniy va erkak kishidek javob ber. O'zbek tilida."
                 content = [prompt]
                 if event.photo:
-                    p = await event.download_media(); img = PIL.Image.open(p); img.load(); content.append(img); res = model.generate_content(content); os.remove(p)
+                    p = await event.download_media(); img = PIL.Image.open(p); img.load(); content.append(img)
+                    answer = await generate_with_rotation(content); os.remove(p)
                 elif event.voice:
-                    p = await event.download_media(); up = genai.upload_file(path=p); content.append(up); res = model.generate_content(content); os.remove(p)
-                else: res = model.generate_content(content)
-                answer = res.text if res.candidates else "..."
+                    p = await event.download_media(); up = genai.upload_file(path=p); content.append(up)
+                    answer = await generate_with_rotation(content); os.remove(p)
+                else:
+                    answer = await generate_with_rotation(content)
                 async with client.action(event.chat_id, 'typing'):
                     await asyncio.sleep(1.5); await event.reply(answer)
     except Exception as e: print(f"⚠️ Xato: {e}")
+
 
 # --- ISHGA TUSHIRISH ---
 if __name__ == '__main__':

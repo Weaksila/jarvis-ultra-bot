@@ -418,16 +418,35 @@ async def auto_respond(event):
                 async with client.action(event.chat_id, 'typing'):
                     await asyncio.sleep(1.5); await event.reply(answer)
 
-    except Exception as e: print(f"⚠️ Xato: {e}", flush=True)
+    except Exception as e: 
+        err_msg = str(e)
+        print(f"⚠️ Xato: {err_msg}", flush=True)
+        try:
+            await client.send_message("me", f"⚠️ **JARVIS XATOLIK!**\n👤 **Kim bilan:** {name}\n❌ **Xato turi:** `{err_msg}`")
+        except: pass
 
 
 # --- ISHGA TUSHIRISH ---
+async def startup_notification():
+    try:
+        msg = (
+            "✅ **JARVIS PRO ISHGA TUSHDI!**\n\n"
+            f"🔑 **API Kalitlar:** {len(API_KEYS)} ta\n"
+            "🌐 **Server:** Render (24/7)\n"
+            "🧠 **Model:** Gemini 1.5 Flash\n\n"
+            "Men ishlashga to'liq tayyorman! Xatolik bo'lsa darhol shu yerga yozaman."
+        )
+        await client.send_message("me", msg)
+    except Exception as e:
+        print(f"Startup xabarida xato: {e}")
+
 if __name__ == '__main__':
     Thread(target=run_flask).start()
     print("Jarvis PRO Edition ishga tushishga tayyor...", flush=True)
     client.start()
-    # Kunlik hisobot vazifasini fonda ishga tushirish
+    # Orqa fon vazifalarini ishga tushirish
     loop = client.loop
+    loop.create_task(startup_notification())
     loop.create_task(daily_api_report())
     print(f"✅ {len(API_KEYS)} ta API kalit yuklandi. Kunlik hisobot 08:00 UTC da yuboriladi.", flush=True)
     client.run_until_disconnected()

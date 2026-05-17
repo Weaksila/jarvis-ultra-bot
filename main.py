@@ -242,9 +242,21 @@ async def ocr_handler(event):
     await event.edit("`O'qilmoqda...` 🔍")
     path = await reply.download_media()
     try:
+        cl = get_client()
         with PIL.Image.open(path) as img:
             img.load()
-            response = model.generate_content(["Rasmdagi matnlarni ko'chirib ber.", img])
+            import base64, io
+            buf = io.BytesIO()
+            img.save(buf, format='JPEG')
+            img_bytes = buf.getvalue()
+            from google.genai import types as gt
+            response = cl.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=[
+                    gt.Part.from_bytes(data=img_bytes, mime_type='image/jpeg'),
+                    "Rasmdagi barcha matnlarni aniq ko'chirib ber."
+                ]
+            )
             await event.edit(f"📝 **Matn:**\n\n{response.text}")
     except Exception as e: await event.edit(f"❌ Xatolik: {e}")
     if os.path.exists(path): os.remove(path)
@@ -252,7 +264,7 @@ async def ocr_handler(event):
 @client.on(events.NewMessage(pattern=r'\.summary ?(\d+)?', outgoing=True))
 async def summary_handler(event):
     lim = int(event.pattern_match.group(1) or 50)
-    await event.edit(f"`{lim} xabar tahlili...` 📑")
+    await event.edit(f"`{lim} xabar tahlili...` 📍")
     msgs = []
     async for m in client.iter_messages(event.chat_id, limit=lim):
         if m.text:
@@ -260,8 +272,8 @@ async def summary_handler(event):
             name = utils.get_display_name(s) if s else "Noma'lum"
             msgs.append(f"{name}: {m.text}")
     if not msgs: return await event.edit("`Xabarlar yo'q.`")
-    res = model.generate_content(f"Xulosa qil:\n\n" + "\n".join(msgs[::-1]))
-    await event.edit(f"📑 **PRO Xulosa:**\n\n{res.text}")
+    summary_text = await generate_with_rotation(f"Xulosa qil:\n\n" + "\n".join(msgs[::-1]))
+    await event.edit(f"📍 **PRO Xulosa:**\n\n{summary_text}")
 
 @client.on(events.Raw(types.UpdatePhoneCall))
 async def call_handler(event):
@@ -374,8 +386,15 @@ async def auto_respond(event):
                     p = await event.download_media(); img = PIL.Image.open(p); img.load(); content.append(img)
                     answer = await generate_with_rotation(content); os.remove(p)
                 elif event.voice:
-                    p = await event.download_media(); up = genai.upload_file(path=p); content.append(up)
-                    answer = await generate_with_rotation(content); os.remove(p)
+                    p = await event.download_media()
+                    try:
+                        with open(p, 'rb') as f:
+                            audio_bytes = f.read()
+                        from google.genai import types as gt
+                        content.append(gt.Part.from_bytes(data=audio_bytes, mime_type='audio/ogg'))
+                    except: pass
+                    answer = await generate_with_rotation(content)
+                    if os.path.exists(p): os.remove(p)
                 else:
                     answer = await generate_with_rotation(content)
                 
